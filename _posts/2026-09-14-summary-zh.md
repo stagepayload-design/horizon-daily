@@ -5,32 +5,32 @@ date: 2026-09-14
 lang: zh
 ---
 
-> From 10 items, 1 important content pieces were selected
+> From 4 items, 1 important content pieces were selected
 
 ---
 
-1. [Perplexity 将端到端系统交由 GPT-6 Astra 自主处理](#item-1) ⭐️ 8.0/10
+1. [ComfyUI 9.3 反序列化 RCE 实测：官方未当作漏洞修复的"唯一漏网之鱼"](#item-1) ⭐️ 8.0/10
 
 ---
 
 <a id="item-1"></a>
-## [Perplexity 将端到端系统交由 GPT-6 Astra 自主处理](https://openai.com/index/perplexity-improving-accuracy-with-astra) ⭐️ 8.0/10
+## [ComfyUI 9.3 反序列化 RCE 实测：官方未当作漏洞修复的"唯一漏网之鱼"](https://xz.aliyun.com/news/92827) ⭐️ 8.0/10
 
-Perplexity 正在使用 OpenAI 的 GPT-6 Astra 自主撰写沟通内容、修改软件并监控生产系统，与早期模型相比，需要人工介入和确认的频率大幅降低。OpenAI 在其官网发布了一份案例研究，介绍了这一部署情况。 这标志着 AI 智能体正被赋予以往只交给人类工程师的生产关键操作权限，可能重塑软件团队中人与模型的分工方式。如果运行可靠，它将加速自主智能体在整个企业软件生态中的采用。 该公告内容简短，未披露技术细节，例如 Astra 的输出如何被验证、有哪些护栏限制其对生产环境的访问权限，以及人工确认的频率究竟是多少。独立评测指出，GPT-6 Astra 的头部基准分数会因所用评测框架不同而出现明显差异。
+一份实测报告披露了 CVE-2026-68771，这是一个影响 ComfyUI v0.22.0 至 v0.25.0 的反序列化远程代码执行漏洞，该漏洞在 v0.26.0 中被修复，但据称官方并未将其视为安全问题处理。所有测试均在本地隔离虚拟机中进行，作者也提醒不要对未授权目标进行复现。 ComfyUI 是广泛用于 Stable Diffusion 及其他生成式 AI 工作流的节点式界面，因此其中的未授权 RCE 漏洞可能使自托管实例面临系统被完全攻陷的风险。官方未将该缺陷视为安全问题处理的说法，也引发了人们对快速演进的 AI 工具生态中漏洞披露与补丁管理实践的担忧。 根据漏洞数据库信息，该缺陷位于 LoadTrainingDataset 节点，其 execute() 函数使用 torch.load(f) 从服务器输出目录加载数据集分片，从而启用了不安全的 pickle 反序列化。该漏洞被描述为无需认证，即攻击者无需有效凭据即可触发，影响版本为 v0.22.0 至 v0.25.0，并在 v0.26.0 中修复。
 
-rss · OpenAI Blog · Sep 14, 00:00
+rss · Aliyun Xianzhi Community · Sep 14, 01:19
 
-**背景**: Perplexity 是一款 AI 驱动的答案引擎，并已扩展到自主智能体产品，其中包括被定位为可自主完成端到端项目管理的“数字员工”Perplexity Computer。GPT-6 Astra 是 OpenAI 面向企业用途的最智能模型，结合了高级推理与计算机操作能力，可完成复杂工作流。生产监控指持续观察线上系统以发现异常、错误和性能问题，这一任务传统上由专门的可观测性工具和值班工程师负责。
+**背景**: ComfyUI 是一个开源、基于节点的图形界面，用于构建和运行生成式 AI 图像与视频流水线，用户通常在自己的机器或服务器上自行托管。反序列化漏洞发生在应用程序从不受信任的数据重建对象时，而在 Python 中，pickle 格式尤其危险，因为它在加载过程中可以执行任意代码。远程代码执行（RCE）是最严重的一类漏洞之一，因为它允许攻击者在目标系统上运行命令。CVE 编号是分配给公开披露安全缺陷的标准标识符。
 
 <details><summary>参考链接</summary>
 <ul>
-<li><a href="https://openai.com/business/model/">GPT - 6 Astra : AI for Complex Business Work | OpenAI</a></li>
-<li><a href="https://ofox.ai/zh/blog/gpt-6-astra-review-2026/">GPT - 6 Astra 测评：37 分的裂口，和你看不见的那部分思考</a></li>
-<li><a href="https://www.funblocks.net/aitools/reviews/perplexity-computer">Perplexity Computer: The Unified AI Agent... | FunBlocks AI Reviews</a></li>
+<li><a href="https://app.opencve.io/cve/CVE-2026-68771">CVE - 2026 - 68771 - Vulnerability Details - OpenCVE</a></li>
+<li><a href="https://vulmon.com/vulnerabilitydetails?qid=CVE-2026-68771">CVE - 2026 - 68771 - Unsafe Deserialization Remote Code</a></li>
+<li><a href="https://www.rapid7.com/db/vulnerabilities/cve-2026-68771/">CVE - 2026 - 68771 : Comfy -Org... | Rapid7 Vulnerability Database</a></li>
 
 </ul>
 </details>
 
-**标签**: `#AI`, `#GPT-6`, `#Perplexity`, `#autonomous systems`, `#OpenAI`
+**标签**: `#security`, `#vulnerability`, `#RCE`, `#ComfyUI`, `#AI/ML`
 
 ---
