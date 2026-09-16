@@ -1,6 +1,8 @@
 import json
 import pytest
+from datetime import datetime, timezone
 from pathlib import Path
+from src.models import ContentItem, SourceType
 from src.storage.manager import StorageManager, ConfigError, _expand_env_vars
 
 def test_load_config_missing_file(tmp_path):
@@ -126,3 +128,38 @@ def test_load_config_expands_env_vars_in_ai_base_url(tmp_path, monkeypatch):
     storage = StorageManager(data_dir=str(tmp_path))
     config = storage.load_config()
     assert config.ai.base_url == "https://private-proxy.example/v1"
+
+
+def test_save_daily_summary_uses_year_month_directories(tmp_path):
+    storage = StorageManager(data_dir=str(tmp_path))
+
+    saved = storage.save_daily_summary("2026-09-16", "# Daily", language="zh")
+
+    assert saved == tmp_path / "summaries" / "2026" / "09" / "horizon-2026-09-16-zh.md"
+    assert saved.read_text(encoding="utf-8") == "# Daily"
+
+
+def test_merge_daily_items_keeps_items_from_multiple_runs(tmp_path):
+    storage = StorageManager(data_dir=str(tmp_path))
+
+    def make_item(item_id, url, score):
+        return ContentItem(
+            id=item_id,
+            source_type=SourceType.RSS,
+            title=item_id,
+            url=url,
+            published_at=datetime(2026, 9, 16, tzinfo=timezone.utc),
+            ai_score=score,
+        )
+
+    morning = make_item("morning", "https://example.com/morning", 8.0)
+    afternoon = make_item("afternoon", "https://example.com/afternoon", 9.0)
+    duplicate = make_item("duplicate", "https://example.com/morning/", 8.5)
+
+    storage.merge_daily_items("2026-09-16", [morning], 53)
+    merged, total = storage.merge_daily_items(
+        "2026-09-16", [afternoon, duplicate], 3
+    )
+
+    assert [item.id for item in merged] == ["afternoon", "duplicate"]
+    assert total == 53

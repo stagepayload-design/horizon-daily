@@ -82,6 +82,16 @@ def _preview_message(
         console.print(
             f"  [cyan]Headers:[/cyan] {json.dumps(preview['headers'], ensure_ascii=False)}"
         )
+    extra_targets = preview.get("targets") or []
+    if len(extra_targets) > 1:
+        for index, target in enumerate(extra_targets[1:], start=2):
+            console.print(f"\n[bold]── Extra Target {index} ──[/bold]")
+            console.print(f"  [cyan]URL:[/cyan] {target['url']}")
+            if target.get("body") is not None:
+                rendered_body = target["body"]
+                if len(rendered_body) > 3000:
+                    rendered_body = rendered_body[:3000] + "\n... (truncated)"
+                console.print(Panel(rendered_body, title=f"Request Body {index}", border_style="green"))
 
 
 async def _run_test(

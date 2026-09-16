@@ -94,11 +94,14 @@ class RSSScraper(BaseScraper):
 
                 # Extract content
                 content = self._extract_content(entry)
+                title = entry.get("title", "Untitled")
+                if not self._matches_filters(source, title, content):
+                    continue
 
                 item = ContentItem(
                     id=self._generate_id("rss", feed_id, entry_hash),
                     source_type=SourceType.RSS,
-                    title=entry.get("title", "Untitled"),
+                    title=title,
                     url=entry.get("link", str(source.url)),
                     content=content,
                     author=entry.get("author", source.name),
@@ -110,6 +113,8 @@ class RSSScraper(BaseScraper):
                     },
                 )
                 items.append(item)
+                if source.fetch_limit and len(items) >= source.fetch_limit:
+                    break
 
         except httpx.HTTPError as e:
             logger.warning("Error fetching RSS feed %s: %s", source.name, e)
@@ -117,6 +122,18 @@ class RSSScraper(BaseScraper):
             logger.warning("Error parsing RSS feed %s: %s", source.name, e)
 
         return items
+
+    @staticmethod
+    def _matches_filters(source: RSSSourceConfig, title: str, content: str) -> bool:
+        """Apply optional case-insensitive keyword filters before AI analysis."""
+        haystack = f"{title}\n{content}".casefold()
+        if source.include_keywords and not any(
+            keyword.casefold() in haystack for keyword in source.include_keywords
+        ):
+            return False
+        return not any(
+            keyword.casefold() in haystack for keyword in source.exclude_keywords
+        )
 
     def _parse_date(self, entry: dict) -> datetime:
         """Parse publication date from feed entry.

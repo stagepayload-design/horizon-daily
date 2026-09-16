@@ -127,9 +127,14 @@ class HorizonOrchestrator:
 
             # 7. Generate and save daily summaries for each configured language
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            published_items, published_total = self.storage.merge_daily_items(
+                today, important_items, len(all_items)
+            )
             for lang in self.config.ai.languages:
                 summarizer = DailySummarizer()
-                summary = await summarizer.generate_summary(important_items, today, len(all_items), language=lang)
+                summary = await summarizer.generate_summary(
+                    published_items, today, published_total, language=lang
+                )
 
                 # Save to data/summaries/
                 summary_path = self.storage.save_daily_summary(today, summary, language=lang)
@@ -140,7 +145,7 @@ class HorizonOrchestrator:
                     from pathlib import Path
 
                     post_filename = f"{today}-summary-{lang}.md"
-                    posts_dir = Path("docs/_posts")
+                    posts_dir = Path("docs/_posts") / today[:4] / today[5:7]
                     posts_dir.mkdir(parents=True, exist_ok=True)
 
                     dest_path = posts_dir / post_filename
@@ -152,6 +157,7 @@ class HorizonOrchestrator:
                         f"title: \"Horizon Summary: {today} ({lang.upper()})\"\n"
                         f"date: {today}\n"
                         f"lang: {lang}\n"
+                        f"permalink: /{today.replace('-', '/')}/summary-{lang}.html\n"
                         "---\n\n"
                     )
 
@@ -179,8 +185,11 @@ class HorizonOrchestrator:
 
                 # Send webhook notification if configured
                 if self.webhook_notifier:
+                    notification_summary = await summarizer.generate_summary(
+                        important_items, today, len(all_items), language=lang
+                    )
                     await self.webhook_notifier.send_daily_summary(
-                        summary=summary,
+                        summary=notification_summary,
                         important_items=important_items,
                         all_items_count=len(all_items),
                         date=today,

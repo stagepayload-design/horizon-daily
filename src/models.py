@@ -94,6 +94,9 @@ class RSSSourceConfig(BaseModel):
     url: HttpUrl
     enabled: bool = True
     category: Optional[str] = None
+    fetch_limit: Optional[int] = Field(default=None, ge=1)
+    include_keywords: List[str] = Field(default_factory=list)
+    exclude_keywords: List[str] = Field(default_factory=list)
 
 
 class RedditSubredditConfig(BaseModel):
@@ -201,6 +204,15 @@ class SourcesConfig(BaseModel):
     openbb: Optional[OpenBBConfig] = None
 
 
+class ExtraWebhookTarget(BaseModel):
+    """Additional webhook destination with its own URL and body."""
+
+    url_env: Optional[str] = None
+    request_body: Optional[Union[str, dict, list]] = None
+    headers: Optional[str] = None
+    enabled: bool = True
+
+
 class WebhookConfig(BaseModel):
     """Webhook notification configuration."""
 
@@ -222,6 +234,7 @@ class WebhookConfig(BaseModel):
         None  # Optional language filter for webhook delivery; defaults to all AI languages
     )
     enabled: bool = False
+    extra_targets: List["ExtraWebhookTarget"] = Field(default_factory=list)
 
 
 class EmailConfig(BaseModel):

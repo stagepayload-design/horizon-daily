@@ -4,12 +4,13 @@ import json
 import os
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from ..models import Config
+from ..models import Config, ContentItem
 
 
 # Matches ${VAR_NAME} in string config values. Names follow env-var rules
@@ -57,9 +58,11 @@ class StorageManager:
         self.data_dir = Path(data_dir)
         self.config_path = self.data_dir / "config.json"
         self.summaries_dir = self.data_dir / "summaries"
+        self.daily_items_dir = self.data_dir / "daily_items"
 
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.summaries_dir.mkdir(parents=True, exist_ok=True)
+        self.daily_items_dir.mkdir(parents=True, exist_ok=True)
 
     def load_config(self) -> Config:
         if not self.config_path.exists():
@@ -109,13 +112,54 @@ class StorageManager:
         return self.config_path
 
     def save_daily_summary(self, date: str, markdown: str, language: str = "en") -> Path:
+        report_date = datetime.strptime(date, "%Y-%m-%d")
         filename = f"horizon-{date}-{language}.md"
-        filepath = self.summaries_dir / filename
+        report_dir = self.summaries_dir / f"{report_date.year:04d}" / f"{report_date.month:02d}"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        filepath = report_dir / filename
 
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(markdown)
 
         return filepath
+
+    def merge_daily_items(
+        self, date: str, items: list[ContentItem], total_fetched: int
+    ) -> tuple[list[ContentItem], int]:
+        """Persist and merge selected items from multiple runs on the same day."""
+        report_date = datetime.strptime(date, "%Y-%m-%d")
+        state_dir = self.daily_items_dir / f"{report_date.year:04d}" / f"{report_date.month:02d}"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_path = state_dir / f"{date}.json"
+
+        existing_items: list[ContentItem] = []
+        previous_total = 0
+        if state_path.exists():
+            try:
+                payload = json.loads(state_path.read_text(encoding="utf-8"))
+                existing_items = [ContentItem.model_validate(item) for item in payload.get("items", [])]
+                previous_total = int(payload.get("total_fetched", 0))
+            except (json.JSONDecodeError, ValidationError, TypeError, ValueError):
+                existing_items = []
+
+        merged: dict[str, ContentItem] = {}
+        for item in [*existing_items, *items]:
+            key = str(item.url).rstrip("/").casefold()
+            previous = merged.get(key)
+            if previous is None or (item.ai_score or 0) >= (previous.ai_score or 0):
+                merged[key] = item
+
+        merged_items = sorted(merged.values(), key=lambda item: item.ai_score or 0, reverse=True)
+        merged_total = max(previous_total, total_fetched, len(merged_items))
+        payload = {
+            "date": date,
+            "total_fetched": merged_total,
+            "items": [item.model_dump(mode="json") for item in merged_items],
+        }
+        temp_path = state_path.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp_path.replace(state_path)
+        return merged_items, merged_total
 
     def load_subscribers(self) -> list:
         """Loads the list of email subscribers."""

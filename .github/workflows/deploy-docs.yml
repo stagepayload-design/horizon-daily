@@ -17,6 +17,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Validate report archive
+        run: python scripts/validate_reports.py
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:

@@ -39,9 +39,12 @@ ENV/
 # Data files (keep structure, ignore content)
 data/seen.json
 data/summaries/*.md
+data/summaries/**/*.md
+data/daily_items/
 data/subscribers.json
 
 docs/_posts/*.md
+docs/_posts/**/*.md
 
 # Logs
 logs/*.log

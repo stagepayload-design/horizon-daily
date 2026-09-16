@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 
 # Pattern: #{key} or #{key?param1=val1&param2=val2}
 _PLACEHOLDER_RE = re.compile(r"#\{(\w+)(\?\w+=[^}]+)?\}")
+_ENV_RE = re.compile(r"\$\{(\w+)\}")
+
+
+def _expand_env(value: str) -> str:
+    """Expand ${ENV_VAR} placeholders from the process environment."""
+    return _ENV_RE.sub(lambda m: os.environ.get(m.group(1), m.group(0)).strip(), value)
+
 _DETAILS_RE = re.compile(
     r"<details>\s*<summary>(.*?)</summary>\s*(.*?)\s*</details>",
     re.IGNORECASE | re.DOTALL,
@@ -118,7 +125,7 @@ def _render(
 
             return str(value)
 
-        return _PLACEHOLDER_RE.sub(_replace, template)
+        return _expand_env(_PLACEHOLDER_RE.sub(_replace, template))
     # int, float, bool, None — return as-is
     return template
 
@@ -272,6 +279,7 @@ class WebhookNotifier:
     def __init__(self, config: WebhookConfig, console=None):
         self.config = config
         self.url = os.getenv(config.url_env or "") if config.url_env else None
+        self.extra_targets = list(getattr(config, "extra_targets", None) or [])
         if console is None:
             try:
                 from rich.console import Console
@@ -287,15 +295,36 @@ class WebhookNotifier:
         else:
             self.console = console
 
+    def _iter_targets(self):
+        """Yield (url, request_body, headers) for the primary webhook and extras."""
+        if self.url:
+            yield self.url, self.config.request_body, self.config.headers
+        for target in self.extra_targets:
+            if not getattr(target, "enabled", True):
+                continue
+            url = os.getenv(target.url_env or "") if target.url_env else None
+            if not url:
+                logger.warning(
+                    "Extra webhook enabled but URL is empty (env var %s not set), skipping.",
+                    target.url_env,
+                )
+                continue
+            body = target.request_body if target.request_body is not None else self.config.request_body
+            headers = target.headers if target.headers is not None else self.config.headers
+            yield url, body, headers
+
     def _render_request_components(
-        self, variables: dict
+        self, variables: dict, url: str | None = None, request_body=None, headers: str | None = None
     ) -> tuple[str, str | None, dict[str, str]]:
         """Render the final request URL, body, and headers for the given variables."""
-        request_url = cast(str, _render(self.url or "", variables))
+        request_url = cast(str, _render(url if url is not None else (self.url or ""), variables))
 
         content_type = "application/x-www-form-urlencoded"
         body_content = None
-        raw_body = variables.get("_request_body_override", self.config.request_body)
+        raw_body = variables.get(
+            "_request_body_override",
+            request_body if request_body is not None else self.config.request_body,
+        )
         body_variables = _prepare_variables_for_body(raw_body, variables)
 
         if raw_body:
@@ -313,7 +342,7 @@ class WebhookNotifier:
                     except json.JSONDecodeError:
                         pass
 
-        headers = _extract_headers(self.config.headers)
+        headers = _extract_headers(headers if headers is not None else self.config.headers)
         headers["Content-Type"] = content_type
         return request_url, body_content, headers
 
@@ -416,11 +445,24 @@ class WebhookNotifier:
 
     def build_preview(self, variables: dict) -> dict[str, Any]:
         """Build the fully rendered request for dry-run preview."""
-        request_url, body_content, headers = self._render_request_components(variables)
+        extra = []
+        for url, request_body, headers_cfg in self._iter_targets():
+            u, b, h = self._render_request_components(
+                variables, url=url, request_body=request_body, headers=headers_cfg
+            )
+            extra.append(
+                {
+                    "url": redact_url(u),
+                    "body": b,
+                    "headers": redact_headers(h),
+                }
+            )
+        primary = extra[0] if extra else {"url": "", "body": None, "headers": {}}
         return {
-            "url": redact_url(request_url),
-            "body": body_content,
-            "headers": redact_headers(headers),
+            "url": primary["url"],
+            "body": primary["body"],
+            "headers": primary["headers"],
+            "targets": extra,
         }
 
     def build_daily_summary_messages(
@@ -543,54 +585,55 @@ class WebhookNotifier:
         if not self.config.enabled:
             return
 
-        if not self.url:
+        targets = list(self._iter_targets())
+        if not targets:
             logger.warning(
-                "Webhook enabled but URL is empty (env var %s not set), skipping notification.",
+                "Webhook enabled but no URLs are set (env var %s), skipping notification.",
                 self.config.url_env,
             )
             return
 
-        request_url, body_content, headers = self._render_request_components(variables)
-        safe_url = redact_url(request_url)
-        if body_content is not None:
-            logger.debug(
-                "Webhook POST body (%d chars): %s",
-                len(body_content or ""),
-                (body_content or "")[:2000],
-            )
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                if body_content is None:
-                    response = await client.get(request_url, headers=headers)
-                else:
-                    response = await client.post(
-                        request_url,
-                        content=body_content.encode("utf-8"),
-                        headers=headers,
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for url, request_body, headers_cfg in targets:
+                request_url, body_content, headers = self._render_request_components(
+                    variables, url=url, request_body=request_body, headers=headers_cfg
+                )
+                safe_url = redact_url(request_url)
+                if body_content is not None:
+                    logger.debug(
+                        "Webhook POST body (%d chars): %s",
+                        len(body_content or ""),
+                        (body_content or "")[:2000],
                     )
-
-            if response.status_code == 200:
-                logger.info(
-                    "Webhook sent OK. URL: %s, body: %s",
-                    safe_url,
-                    response.text[:500],
-                )
-            else:
-                self.console.print(
-                    f"[red]Webhook failed! status={response.status_code} "
-                    f"response={response.text[:500]}[/red]"
-                )
-                logger.error(
-                    "Webhook failed! URL: %s, status: %d, body: %s",
-                    safe_url,
-                    response.status_code,
-                    response.text[:500],
-                )
-
-        except Exception as e:
-            self.console.print(f"[red]Webhook call failed! Exception: {e}[/red]")
-            logger.error("Webhook call failed! URL: %s, exception: %s", safe_url, e)
+                try:
+                    if body_content is None:
+                        response = await client.get(request_url, headers=headers)
+                    else:
+                        response = await client.post(
+                            request_url,
+                            content=body_content.encode("utf-8"),
+                            headers=headers,
+                        )
+                    if response.status_code == 200:
+                        logger.info(
+                            "Webhook sent OK. URL: %s, body: %s",
+                            safe_url,
+                            response.text[:500],
+                        )
+                    else:
+                        self.console.print(
+                            f"[red]Webhook failed! status={response.status_code} "
+                            f"response={response.text[:500]}[/red]"
+                        )
+                        logger.error(
+                            "Webhook failed! URL: %s, status: %d, body: %s",
+                            safe_url,
+                            response.status_code,
+                            response.text[:500],
+                        )
+                except Exception as e:
+                    self.console.print(f"[red]Webhook call failed! Exception: {e}[/red]")
+                    logger.error("Webhook call failed! URL: %s, exception: %s", safe_url, e)
 
     async def send_daily_summary(
         self,
