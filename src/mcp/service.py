@@ -631,6 +631,7 @@ class HorizonPipelineService:
         notifier = WebhookNotifier(webhook_config)
         variables = {
             "date": date,
+            "date_path": date.replace("-", "/"),
             "language": language,
             "important_items": important_items,
             "all_items": all_items,

@@ -481,6 +481,7 @@ class WebhookNotifier:
 
         base_vars = {
             "date": date,
+            "date_path": date.replace("-", "/"),
             "language": lang,
             "important_items": len(important_items),
             "all_items": all_items_count,
@@ -691,6 +692,7 @@ class WebhookNotifier:
         await self.notify(
             {
                 "date": date,
+                "date_path": date.replace("-", "/"),
                 "language": "",
                 "important_items": 0,
                 "all_items": 0,

@@ -802,6 +802,7 @@ class TestSendDailySummary:
             assert vars["important_items"] == 1
             assert vars["all_items"] == 10
             assert vars["result"] == "success"
+            assert vars["date_path"] == "2026/04/24"
             assert vars["language"] == "en"
         del os.environ[_TEST_URL_ENV]
 

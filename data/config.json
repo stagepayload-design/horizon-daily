@@ -468,7 +468,7 @@
     "request_body": {
       "token": "${PUSHPLUS_TOKEN}",
       "title": "Horizon #{date} 资讯",
-      "content": "结果：#{result}\n\n入选内容：#{important_items}/#{all_items}\n\n完整日报：https://github.com/stagepayload-design/horizon-daily/blob/main/docs/_posts/#{date}-summary-zh.md\n\n#{summary?limit=3500&split=---}",
+      "content": "结果：#{result}\n\n入选内容：#{important_items}/#{all_items}\n\n完整日报：https://stagepayload-design.github.io/horizon-daily/#{date_path}/summary-zh.html\n\n#{summary?limit=3500&split=---}",
       "template": "markdown",
       "channel": "wechat"
     },
@@ -480,7 +480,7 @@
           "msgtype": "markdown",
           "markdown": {
             "title": "Horizon #{date} 日报",
-            "text": "Horizon 日报\n\n结果：#{result}\n\n入选内容：#{important_items}/#{all_items}\n\n完整日报：https://github.com/stagepayload-design/horizon-daily/blob/main/docs/_posts/#{date}-summary-zh.md\n\n#{summary?limit=3500&split=---}"
+            "text": "Horizon 日报\n\n结果：#{result}\n\n入选内容：#{important_items}/#{all_items}\n\n完整日报：https://stagepayload-design.github.io/horizon-daily/#{date_path}/summary-zh.html\n\n#{summary?limit=3500&split=---}"
           }
         },
         "enabled": true
